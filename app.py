@@ -32,12 +32,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from iching_system.core.dayan import dayan_six_yao, score_to_yao, get_yao_name
 from iching_system.core.calculator import compute_b_stage
 from iching_system.core.yili_generator import YiliGenerator
+from iching_system.core.yili_llm_adapter import ClaudeLLMAdapter
 from iching_system.divination.a3_questionnaire import get_aspects_for_question, classify_question
 
-# 初始化 Generator（只載入一次）
+# 初始化 Generator 和 Adapter（只載入一次）
 @st.cache_resource
 def get_generator():
     return YiliGenerator()
+
+@st.cache_resource
+def get_adapter():
+    return ClaudeLLMAdapter()
 
 # 樣式
 st.markdown("""
@@ -176,25 +181,33 @@ def show_divining():
             return
     
     # 使用新的 yili_generator
-    with st.spinner("正在解卦..."):
-        try:
-            generator = get_generator()
-            
-            if method == 'A1':
-                # A1: 使用預生成的中性版
+    generator = get_generator()
+    
+    if method == 'A1':
+        # A1: 使用預生成的中性版（秒出）
+        with st.spinner("正在解卦..."):
+            try:
                 result = generator.generate_a1(yao_values)
-            else:
-                # A2/A3: 暫時也用 A1（未來可加 LLM 微調）
-                result = generator.generate_a1(yao_values)
-                result['meta']['question'] = question
-            
-            st.session_state.result = result
-            st.session_state.step = 'result'
-            st.rerun()
-        except Exception as e:
-            st.error(f"解卦失敗：{e}")
-            import traceback
-            st.code(traceback.format_exc())
+                st.session_state.result = result
+                st.session_state.step = 'result'
+                st.rerun()
+            except Exception as e:
+                st.error(f"解卦失敗：{e}")
+                import traceback
+                st.code(traceback.format_exc())
+    else:
+        # A2/A3: 使用 LLM 微調（約 20 秒）
+        with st.spinner("正在解卦... AI 正在根據您的問題微調解讀（約 20 秒）"):
+            try:
+                adapter = get_adapter()
+                result = generator.generate(yao_values, question=question, llm_adapter=adapter)
+                st.session_state.result = result
+                st.session_state.step = 'result'
+                st.rerun()
+            except Exception as e:
+                st.error(f"解卦失敗：{e}")
+                import traceback
+                st.code(traceback.format_exc())
 
 def show_result():
     st.markdown("### 🔮 占卜結果")
