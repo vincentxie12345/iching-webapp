@@ -44,13 +44,19 @@ def get_generator():
 def get_adapter():
     return ClaudeLLMAdapter()
 
-# 樣式
+# 樣式 + PWA 設定
 st.markdown("""
 <style>
     .stButton > button { width: 100%; height: 3em; font-size: 1.2em; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 </style>
+<link rel="manifest" href="static/manifest.json">
+<link rel="apple-touch-icon" href="static/icon-192.png">
+<meta name="theme-color" content="#6c5ce7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="易力決策">
 """, unsafe_allow_html=True)
 
 def main():
