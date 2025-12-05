@@ -19,7 +19,7 @@ except:
 
 # 設定頁面（必須是第一個 Streamlit 指令）
 st.set_page_config(
-    page_title="易經占卜",
+    page_title="易力決策",
     page_icon="🔮",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -31,8 +31,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from iching_system.core.dayan import dayan_six_yao, score_to_yao, get_yao_name
 from iching_system.core.calculator import compute_b_stage
+from iching_system.core.yili_generator import YiliGenerator
 from iching_system.divination.a3_questionnaire import get_aspects_for_question, classify_question
-from iching_system.interpretation.interpreter import interpret
+
+# 初始化 Generator（只載入一次）
+@st.cache_resource
+def get_generator():
+    return YiliGenerator()
 
 # 樣式
 st.markdown("""
@@ -44,7 +49,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def main():
-    st.markdown('<h1 style="text-align:center">🔮 易經占卜</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="text-align:center">🔮 易力決策</h1>', unsafe_allow_html=True)
     
     if 'step' not in st.session_state:
         st.session_state.step = 'select_method'
@@ -89,9 +94,9 @@ def show_method_selection():
     
     with st.expander("📖 說明"):
         st.markdown("""
-        **A1 默禱**：心中默想問題，系統隨機起卦，解卦用「這件事」呈現
+        **A1 默禱**：心中默想問題，系統隨機起卦，使用預生成的中性解卦
         
-        **A2 提問**：輸入問題，系統隨機起卦，解卦針對問題回答
+        **A2 提問**：輸入問題，系統隨機起卦，AI 根據問題微調解卦
         
         **A3 問卷**：回答六個評估問題，根據回答起卦
         """)
@@ -154,65 +159,107 @@ def show_divining():
             if method == 'A1':
                 yao_values = dayan_six_yao()
                 display_question = "（默禱，題目在心中）"
-                interpret_question = "這件事"
             elif method == 'A2':
                 yao_values = dayan_six_yao()
                 display_question = question
-                interpret_question = question
             elif method == 'A3':
                 yao_values = [score_to_yao(s) for s in st.session_state.scores]
                 display_question = question
-                interpret_question = question
             else:
                 st.error(f"未知方式：{method}")
                 return
             
-            hexagrams = compute_b_stage(yao_values)
             st.session_state.yao_values = yao_values
-            st.session_state.hexagrams = hexagrams
             st.session_state.display_question = display_question
-            st.session_state.interpret_question = interpret_question
         except Exception as e:
             st.error(f"起卦失敗：{e}")
             return
     
-    with st.spinner("正在解卦...（約 30-60 秒）"):
+    # 使用新的 yili_generator
+    with st.spinner("正在解卦..."):
         try:
-            interpretation = interpret(interpret_question, hexagrams, display=False)
-            st.session_state.interpretation = interpretation
+            generator = get_generator()
+            
+            if method == 'A1':
+                # A1: 使用預生成的中性版
+                result = generator.generate_a1(yao_values)
+            else:
+                # A2/A3: 暫時也用 A1（未來可加 LLM 微調）
+                result = generator.generate_a1(yao_values)
+                result['meta']['question'] = question
+            
+            st.session_state.result = result
             st.session_state.step = 'result'
             st.rerun()
         except Exception as e:
             st.error(f"解卦失敗：{e}")
+            import traceback
+            st.code(traceback.format_exc())
 
 def show_result():
     st.markdown("### 🔮 占卜結果")
     st.markdown(f"**問題**：{st.session_state.display_question}")
     
-    hexagrams = st.session_state.hexagrams
+    result = st.session_state.result
+    meta = result['meta']
+    sections = result['sections']
+    
+    # 卦象資訊
     with st.expander("📊 卦象資訊"):
-        col1, col2, col3 = st.columns(3)
-        col1.metric("本卦", hexagrams['本卦'].get('name', '—'))
-        col2.metric("之卦", hexagrams['之卦'].get('name', '—'))
-        col3.metric("轉移卦", hexagrams['轉移卦'].get('name', '—'))
+        col1, col2 = st.columns(2)
+        col1.metric("本卦", f"（{meta['ben_code']}）")
+        col2.metric("之卦", f"（{meta['zhi_code']}）" if not meta['is_static'] else "無變爻")
+        if not meta['is_static']:
+            st.text(f"變爻位置：{meta['change_positions']}")
         st.text(f"六爻：{st.session_state.yao_values}")
     
     st.markdown("---")
-    interpretation = st.session_state.interpretation
     
-    sections = [
-        ('1_現況', '1. 現況', '📍', True),
-        ('2_變化趨勢', '2. 變化趨勢', '📈', False),
-        ('3_變化過程', '3. 變化過程', '🔄', False),
-        ('4_六爻境遇', '4. 各階段境遇', '📅', False),
-        ('5_建議', '5. 建議', '💡', True),
-        ('6_展望', '6. 展望', '🌟', False),
-    ]
+    # 1. 現況
+    s1 = sections['s1_status']
+    with st.expander(f"📍 1. {s1['title']}（{meta['ben_code']}）", expanded=True):
+        st.markdown(s1['content'])
     
-    for key, title, icon, expanded in sections:
-        if key in interpretation:
-            with st.expander(f"{icon} {title}", expanded=expanded):
-                st.markdown(interpretation[key])
+    # 2. 變化趨勢
+    s2 = sections['s2_trend']
+    with st.expander(f"📈 2. {s2['title']}（{meta['ben_code']}）→（{meta['zhi_code']}）"):
+        st.markdown(s2['content'])
+    
+    # 3. 變化過程
+    s3 = sections['s3_process']
+    if s3:
+        with st.expander(f"🔄 3. {s3['title']}（{meta['trans_code']}）"):
+            st.markdown(s3['content'])
+    
+    # 4. 六階段
+    s4 = sections['s4_stages']
+    with st.expander(f"📅 4. {s4['title']}"):
+        for stage in s4['stages']:
+            marker = "⚡ " if stage['is_change'] else ""
+            st.markdown(f"**{marker}第{stage['position']}階段（{stage['scope']}・{stage['name']}）**")
+            st.markdown(stage['content'])
+            st.markdown("---")
+    
+    # 5. 建議
+    s5 = sections['s5_advice']
+    with st.expander(f"💡 5. {s5['title']}", expanded=True):
+        if s5['is_static']:
+            st.markdown("目前沒有明顯的變動跡象，六個面向的建議如下：")
+        else:
+            st.markdown("核心考量在於把握以下方向：")
+        st.markdown("")
+        for item in s5['items']:
+            st.markdown(f"**第{item['position']}項：{item['name']}**")
+            st.markdown(item['advice'])
+            st.markdown(f"*→ {item['action_hint']}*")
+            st.markdown("---")
+    
+    # 6. 展望
+    s6 = sections['s6_outlook']
+    with st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）"):
+        st.markdown("如果依照上述建議採取行動，未來的局面將會是：")
+        st.markdown("")
+        st.markdown(s6['content'])
     
     st.markdown("---")
     if st.button("🔄 重新占卜"):
