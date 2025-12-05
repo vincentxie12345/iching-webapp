@@ -18,7 +18,9 @@ class YiliGenerator:
     def __init__(self, data_path=None):
         """載入三個 JSON"""
         if data_path is None:
-            data_path = os.path.dirname(os.path.abspath(__file__))
+            # Webapp 結構：core/ 和 data/ 同層
+            base = os.path.dirname(os.path.abspath(__file__))
+            data_path = os.path.join(base, '..', 'data')
         
         with open(os.path.join(data_path, 'i_ching_modern2.json'), 'r', encoding='utf-8') as f:
             self.modern2 = json.load(f)
