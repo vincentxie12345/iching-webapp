@@ -274,8 +274,8 @@ def show_result():
             st.session_state.s5_opened = True
             st.rerun()
     else:
-        # s5 內容（立即顯示）
-        with st.expander(f"💡 5. {s5['title']}", expanded=True):
+        # s5 內容（閉合的 expander，讓用戶點開看）
+        with st.expander(f"💡 5. {s5['title']}", expanded=False):
             if s5['is_static']:
                 st.markdown("目前沒有明顯的變動跡象，六個面向的建議如下：")
             else:
@@ -287,20 +287,25 @@ def show_result():
                 st.markdown(f"*→ {item['action_hint']}*")
                 st.markdown("---")
         
-        # 6. 展望 - s5 顯示後，s6 在下方載入
+        # 6. 展望 - 另外的按鈕觸發
         s6 = sections['s6_outlook']
+        s6_opened = st.session_state.get('s6_opened', False)
         
-        if need_adapt and not adapted['s6']:
-            # s6 正在載入，顯示 loading
-            with st.status("🔮 AI 正在分析未來展望...", expanded=True) as status:
-                adapter = get_adapter()
-                s6['content'] = adapter.adapt_single(s6['content'], question, 's6')
-                adapted['s6'] = True
-                st.session_state.adapted = adapted
-                status.update(label="✅ 展望分析完成", state="complete", expanded=False)
-            st.rerun()
+        if not s6_opened:
+            # 顯示按鈕
+            if st.button("🌟 點擊查看「6. 展望」"):
+                st.session_state.s6_opened = True
+                st.rerun()
         else:
-            # s6 已完成，顯示內容
+            # s6 需要微調
+            if need_adapt and not adapted['s6']:
+                with st.spinner("🔮 AI 正在分析未來展望..."):
+                    adapter = get_adapter()
+                    s6['content'] = adapter.adapt_single(s6['content'], question, 's6')
+                    adapted['s6'] = True
+                    st.session_state.adapted = adapted
+            
+            # 顯示 s6 內容
             with st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）", expanded=True):
                 st.markdown("如果依照上述建議採取行動，未來的局面將會是：")
                 st.markdown("")
