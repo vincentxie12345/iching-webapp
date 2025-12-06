@@ -255,44 +255,58 @@ def show_result():
         with st.expander(f"🔄 3. {s3['title']}（{meta['trans_code']}）"):
             st.markdown(s3['content'])
     
-    # 4. 六階段（預生成，秒出）
+    # 4. 六階段（預生成，秒出）- 點開後才能看 s5
     s4 = sections['s4_stages']
-    with st.expander(f"📅 4. {s4['title']}"):
+    s4_key = st.expander(f"📅 4. {s4['title']}")
+    with s4_key:
         for stage in s4['stages']:
             marker = "⚡ " if stage['is_change'] else ""
             st.markdown(f"**{marker}第{stage['position']}階段（{stage['scope']}・{stage['name']}）**")
             st.markdown(stage['content'])
             st.markdown("---")
+        # 標記 s4 已展開
+        st.session_state.s4_opened = True
     
-    # 5. 建議（預生成，秒出）
+    # 5. 建議 - s4 展開後才能點擊，點擊時背景呼叫 s6
     s5 = sections['s5_advice']
-    with st.expander(f"💡 5. {s5['title']}", expanded=True):
-        if s5['is_static']:
-            st.markdown("目前沒有明顯的變動跡象，六個面向的建議如下：")
-        else:
-            st.markdown("核心考量在於把握以下方向：")
-        st.markdown("")
-        for item in s5['items']:
-            st.markdown(f"**第{item['position']}項：{item['name']}**")
-            st.markdown(item['advice'])
-            st.markdown(f"*→ {item['action_hint']}*")
-            st.markdown("---")
+    s4_opened = st.session_state.get('s4_opened', False)
     
-    # 6. 展望 - 點開時微調
+    if s4_opened:
+        s5_key = st.expander(f"💡 5. {s5['title']}")
+        with s5_key:
+            # 標記 s5 已展開，同時觸發 s6 微調
+            if not st.session_state.get('s5_opened', False):
+                st.session_state.s5_opened = True
+                # 背景呼叫 s6
+                if need_adapt and not adapted['s6']:
+                    adapter = get_adapter()
+                    s6 = sections['s6_outlook']
+                    s6['content'] = adapter.adapt_single(s6['content'], question, 's6')
+                    adapted['s6'] = True
+                    st.session_state.adapted = adapted
+            
+            if s5['is_static']:
+                st.markdown("目前沒有明顯的變動跡象，六個面向的建議如下：")
+            else:
+                st.markdown("核心考量在於把握以下方向：")
+            st.markdown("")
+            for item in s5['items']:
+                st.markdown(f"**第{item['position']}項：{item['name']}**")
+                st.markdown(item['advice'])
+                st.markdown(f"*→ {item['action_hint']}*")
+                st.markdown("---")
+    else:
+        st.info("👆 請先展開「4. 六階段境遇」")
+    
+    # 6. 展望 - s5 展開後自動出現（已在 s5 時微調完成）
     s6 = sections['s6_outlook']
-    s6_expander = st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）")
-    with s6_expander:
-        if need_adapt and not adapted['s6']:
-            with st.spinner("AI 正在預測展望..."):
-                import time
-                time.sleep(0.5)  # 短暫延遲讓體驗更順
-                adapter = get_adapter()
-                s6['content'] = adapter.adapt_single(s6['content'], question, 's6')
-                adapted['s6'] = True
-                st.session_state.adapted = adapted
-        st.markdown("如果依照上述建議採取行動，未來的局面將會是：")
-        st.markdown("")
-        st.markdown(s6['content'])
+    s5_opened = st.session_state.get('s5_opened', False)
+    
+    if s5_opened:
+        with st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）", expanded=True):
+            st.markdown("如果依照上述建議採取行動，未來的局面將會是：")
+            st.markdown("")
+            st.markdown(s6['content'])
     
     st.markdown("---")
     if st.button("🔄 重新占卜"):
