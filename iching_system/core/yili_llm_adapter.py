@@ -1,6 +1,7 @@
 """
 易力決策 - LLM 微調適配器
 用於 A2 模式，將中性版文字根據問題進行微調
+支援漸進式載入：s1 → s2 → s6（個別呼叫）
 """
 
 import os
@@ -10,11 +11,16 @@ from anthropic import Anthropic
 class ClaudeLLMAdapter:
     """Claude API 微調適配器"""
     
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, use_haiku=True):
         if api_key is None:
             api_key = os.environ.get('ANTHROPIC_API_KEY')
         self.client = Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-20250514"
+        
+        # Haiku 快又便宜，適合改寫任務
+        if use_haiku:
+            self.model = "claude-3-5-haiku-20241022"
+        else:
+            self.model = "claude-sonnet-4-20250514"
     
     def adapt(self, content, question, section_name):
         """
@@ -57,6 +63,10 @@ class ClaudeLLMAdapter:
         except Exception as e:
             print(f"LLM 微調失敗（{section_name}）：{e}")
             return content  # 失敗時返回原文
+    
+    def adapt_single(self, content, question, section_name):
+        """單獨微調一個段落（用於漸進式載入）"""
+        return self.adapt(content, question, section_name)
 
 
 class OllamaLLMAdapter:
@@ -64,8 +74,6 @@ class OllamaLLMAdapter:
     
     def __init__(self, model_name="llama3.2:1b"):
         self.model_name = model_name
-        # TODO: 實作 Ollama 連接
     
     def adapt(self, content, question, section_name):
-        # TODO: 實作本地 LLM 微調
-        return content  # 暫時返回原文
+        return content

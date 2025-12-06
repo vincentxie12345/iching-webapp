@@ -186,34 +186,19 @@ def show_divining():
             st.error(f"起卦失敗：{e}")
             return
     
-    # 使用新的 yili_generator
+    # 先生成預生成版本（秒出）
     generator = get_generator()
+    result = generator.generate_a1(yao_values)
+    result['meta']['question'] = question if method != 'A1' else ''
     
-    if method == 'A1':
-        # A1: 使用預生成的中性版（秒出）
-        with st.spinner("正在解卦..."):
-            try:
-                result = generator.generate_a1(yao_values)
-                st.session_state.result = result
-                st.session_state.step = 'result'
-                st.rerun()
-            except Exception as e:
-                st.error(f"解卦失敗：{e}")
-                import traceback
-                st.code(traceback.format_exc())
-    else:
-        # A2/A3: 使用 LLM 微調（約 20 秒）
-        with st.spinner("正在解卦... AI 正在根據您的問題微調解讀（約 20 秒）"):
-            try:
-                adapter = get_adapter()
-                result = generator.generate(yao_values, question=question, llm_adapter=adapter)
-                st.session_state.result = result
-                st.session_state.step = 'result'
-                st.rerun()
-            except Exception as e:
-                st.error(f"解卦失敗：{e}")
-                import traceback
-                st.code(traceback.format_exc())
+    st.session_state.result = result
+    st.session_state.method_used = method
+    
+    # 初始化微調狀態
+    st.session_state.adapted = {'s1': False, 's2': False, 's6': False}
+    st.session_state.step = 'result'
+    st.rerun()
+
 
 def show_result():
     st.markdown("### 🔮 占卜結果")
@@ -222,6 +207,12 @@ def show_result():
     result = st.session_state.result
     meta = result['meta']
     sections = result['sections']
+    method = st.session_state.get('method_used', 'A1')
+    question = st.session_state.get('display_question', '')
+    
+    # A2/A3 模式：漸進式微調
+    need_adapt = method in ['A2', 'A3'] and question and question != "（默禱，題目在心中）"
+    adapted = st.session_state.get('adapted', {'s1': False, 's2': False, 's6': False})
     
     # 卦象資訊
     with st.expander("📊 卦象資訊"):
@@ -234,23 +225,37 @@ def show_result():
     
     st.markdown("---")
     
-    # 1. 現況
+    # 1. 現況 - 進入頁面就微調
     s1 = sections['s1_status']
+    if need_adapt and not adapted['s1']:
+        with st.spinner("AI 正在解讀現況..."):
+            adapter = get_adapter()
+            s1['content'] = adapter.adapt_single(s1['content'], question, 's1')
+            adapted['s1'] = True
+            st.session_state.adapted = adapted
+    
     with st.expander(f"📍 1. {s1['title']}（{meta['ben_code']}）", expanded=True):
         st.markdown(s1['content'])
     
-    # 2. 變化趨勢
+    # 2. 變化趨勢 - 點開時微調
     s2 = sections['s2_trend']
-    with st.expander(f"📈 2. {s2['title']}（{meta['ben_code']}）→（{meta['zhi_code']}）"):
+    s2_expander = st.expander(f"📈 2. {s2['title']}（{meta['ben_code']}）→（{meta['zhi_code']}）")
+    with s2_expander:
+        if need_adapt and not adapted['s2']:
+            with st.spinner("AI 正在分析趨勢..."):
+                adapter = get_adapter()
+                s2['content'] = adapter.adapt_single(s2['content'], question, 's2')
+                adapted['s2'] = True
+                st.session_state.adapted = adapted
         st.markdown(s2['content'])
     
-    # 3. 變化過程
+    # 3. 變化過程（預生成，秒出）
     s3 = sections['s3_process']
     if s3:
         with st.expander(f"🔄 3. {s3['title']}（{meta['trans_code']}）"):
             st.markdown(s3['content'])
     
-    # 4. 六階段
+    # 4. 六階段（預生成，秒出）
     s4 = sections['s4_stages']
     with st.expander(f"📅 4. {s4['title']}"):
         for stage in s4['stages']:
@@ -259,7 +264,7 @@ def show_result():
             st.markdown(stage['content'])
             st.markdown("---")
     
-    # 5. 建議
+    # 5. 建議（預生成，秒出）
     s5 = sections['s5_advice']
     with st.expander(f"💡 5. {s5['title']}", expanded=True):
         if s5['is_static']:
@@ -273,9 +278,18 @@ def show_result():
             st.markdown(f"*→ {item['action_hint']}*")
             st.markdown("---")
     
-    # 6. 展望
+    # 6. 展望 - 點開時微調
     s6 = sections['s6_outlook']
-    with st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）"):
+    s6_expander = st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）")
+    with s6_expander:
+        if need_adapt and not adapted['s6']:
+            with st.spinner("AI 正在預測展望..."):
+                import time
+                time.sleep(0.5)  # 短暫延遲讓體驗更順
+                adapter = get_adapter()
+                s6['content'] = adapter.adapt_single(s6['content'], question, 's6')
+                adapted['s6'] = True
+                st.session_state.adapted = adapted
         st.markdown("如果依照上述建議採取行動，未來的局面將會是：")
         st.markdown("")
         st.markdown(s6['content'])
@@ -286,7 +300,9 @@ def show_result():
         st.session_state.method = None
         st.session_state.question = ''
         st.session_state.scores = [5, 5, 5, 5, 5, 5]
+        st.session_state.adapted = {'s1': False, 's2': False, 's6': False}
         st.rerun()
+
 
 if __name__ == "__main__":
     main()
