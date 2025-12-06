@@ -278,29 +278,19 @@ def show_result():
             st.markdown(f"*→ {item['action_hint']}*")
             st.markdown("---")
     
-    # 6. 展望 - 按鈕點擊才呼叫 LLM
+    # 6. 展望 - 點開時微調（跟 s2 一樣）
     s6 = sections['s6_outlook']
-    s6_clicked = st.session_state.get('s6_clicked', False)
-    
-    if not s6_clicked:
-        # 顯示按鈕
-        if st.button("🌟 點擊查看「6. 展望」"):
-            st.session_state.s6_clicked = True
-            st.rerun()
-    else:
-        # 點擊後才呼叫 LLM
+    s6_expander = st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）")
+    with s6_expander:
         if need_adapt and not adapted['s6']:
-            with st.spinner("🔮 AI 正在分析未來展望..."):
+            with st.spinner("AI 正在分析未來展望..."):
                 adapter = get_adapter()
                 s6['content'] = adapter.adapt_single(s6['content'], question, 's6')
                 adapted['s6'] = True
                 st.session_state.adapted = adapted
-        
-        # 顯示 s6 內容
-        with st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）", expanded=True):
-            st.markdown("如果依照上述建議採取行動，未來的局面將會是：")
-            st.markdown("")
-            st.markdown(s6['content'])
+        st.markdown("如果依照上述建議採取行動，未來的局面將會是：")
+        st.markdown("")
+        st.markdown(s6['content'])
     
     st.markdown("---")
     if st.button("🔄 重新占卜"):
