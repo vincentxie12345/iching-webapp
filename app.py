@@ -264,7 +264,7 @@ def show_result():
             st.markdown(stage['content'])
             st.markdown("---")
     
-    # 5. 建議 - 用按鈕控制，點擊後才觸發 s6
+    # 5. 建議 - 用按鈕控制
     s5 = sections['s5_advice']
     s5_opened = st.session_state.get('s5_opened', False)
     
@@ -272,10 +272,9 @@ def show_result():
         # 還沒點擊，顯示按鈕
         if st.button("💡 點擊查看「5. 建議」"):
             st.session_state.s5_opened = True
-            st.session_state.s6_loading = True  # 標記 s6 開始載入
             st.rerun()
     else:
-        # 已點擊，顯示 s5 內容
+        # s5 內容（立即顯示）
         with st.expander(f"💡 5. {s5['title']}", expanded=True):
             if s5['is_static']:
                 st.markdown("目前沒有明顯的變動跡象，六個面向的建議如下：")
@@ -288,21 +287,20 @@ def show_result():
                 st.markdown(f"*→ {item['action_hint']}*")
                 st.markdown("---")
         
-        # 6. 展望 - s5 點開後開始跑
+        # 6. 展望 - s5 顯示後，s6 在下方載入
         s6 = sections['s6_outlook']
-        s6_loading = st.session_state.get('s6_loading', False)
         
-        if s6_loading and need_adapt and not adapted['s6']:
-            # 顯示 loading 讓用戶知道
-            with st.spinner("🔮 AI 正在分析未來展望..."):
+        if need_adapt and not adapted['s6']:
+            # s6 正在載入，顯示 loading
+            with st.status("🔮 AI 正在分析未來展望...", expanded=True) as status:
                 adapter = get_adapter()
                 s6['content'] = adapter.adapt_single(s6['content'], question, 's6')
                 adapted['s6'] = True
                 st.session_state.adapted = adapted
-                st.session_state.s6_loading = False
-                st.rerun()
+                status.update(label="✅ 展望分析完成", state="complete", expanded=False)
+            st.rerun()
         else:
-            # s6 已完成，直接顯示
+            # s6 已完成，顯示內容
             with st.expander(f"🌟 6. {s6['title']}（{meta['zhi_code']}）", expanded=True):
                 st.markdown("如果依照上述建議採取行動，未來的局面將會是：")
                 st.markdown("")
