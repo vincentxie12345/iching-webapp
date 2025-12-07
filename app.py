@@ -249,31 +249,36 @@ def show_a4_outer():
     description = st.session_state.get('a4_description', '')
     inner_scores = st.session_state.get('a4_inner_scores', [5, 5, 5])
     
-    # 根據問題分類取得對應面向
-    q_type = a4_classify(question)
-    outer_aspects = QUESTION_ASPECTS[q_type]['outer']
-    
-    # AI 分析外三爻
-    outer_scores = []
-    
-    # 提取關鍵資訊
-    with st.spinner("正在分析背景資訊..."):
-        full_context = f"{question}\n{description}"
-        context = _extract_context_info(full_context)
-        keywords = context.get('keywords', [question[:10]])
-    
-    st.success("✓ 背景資訊分析完成")
-    
-    # 分析三個外部面向
-    for i, aspect in enumerate(outer_aspects):
-        with st.spinner(f"正在分析第 {i+4} 爻：{aspect[:20]}..."):
-            query = f"{keywords[0] if keywords else question[:10]} {aspect[:10]}"
-            data = _generate_market_info(query)
-            score = _analyze_and_score(aspect, data, question)
-            outer_scores.append(score)
-        st.success(f"✓ 第 {i+4} 爻分析完成：{score} 分")
-    
-    st.session_state.a4_outer_scores = outer_scores
+    # 檢查是否已經分析過（避免重複呼叫 API）
+    if 'a4_outer_scores' in st.session_state and len(st.session_state.a4_outer_scores) == 3:
+        outer_scores = st.session_state.a4_outer_scores
+        st.success("✓ 外部環境分析已完成")
+    else:
+        # 根據問題分類取得對應面向
+        q_type = a4_classify(question)
+        outer_aspects = QUESTION_ASPECTS[q_type]['outer']
+        
+        # AI 分析外三爻
+        outer_scores = []
+        
+        # 提取關鍵資訊
+        with st.spinner("正在分析背景資訊..."):
+            full_context = f"{question}\n{description}"
+            context = _extract_context_info(full_context)
+            keywords = context.get('keywords', [question[:10]])
+        
+        st.success("✓ 背景資訊分析完成")
+        
+        # 分析三個外部面向
+        for i, aspect in enumerate(outer_aspects):
+            with st.spinner(f"正在分析第 {i+4} 爻：{aspect[:20]}..."):
+                query = f"{keywords[0] if keywords else question[:10]} {aspect[:10]}"
+                data = _generate_market_info(query)
+                score = _analyze_and_score(aspect, data, question)
+                outer_scores.append(score)
+            st.success(f"✓ 第 {i+4} 爻分析完成：{score} 分")
+        
+        st.session_state.a4_outer_scores = outer_scores
     
     # 顯示結果摘要
     st.markdown("---")
