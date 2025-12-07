@@ -373,7 +373,7 @@ def show_result():
     # 1. 現況 - 進入頁面就微調
     s1 = sections['s1_status']
     if need_adapt and not adapted['s1']:
-            with st.spinner("AI 正在解讀現況..."):
+        with st.spinner("AI 正在解讀現況..."):
             adapter = get_adapter()
             s1['content'] = adapter.adapt_single(s1['content'], question, 's1')
             adapted['s1'] = True
