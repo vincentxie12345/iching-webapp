@@ -300,12 +300,9 @@ def show_a4_outer():
 
 
 def show_divining():
-    import time
-    _start = time.time()
     st.markdown("### 🔮 占卜中...")
     method = st.session_state.method
     question = st.session_state.question
-    st.toast(f"[1] show_divining method={method}")
     
     with st.spinner("正在起卦..."):
         try:
@@ -335,11 +332,8 @@ def show_divining():
             return
     
     # 先生成預生成版本（秒出）
-    st.toast(f"[2] yao_values={yao_values}")
-    _t1 = time.time()
     generator = get_generator()
     result = generator.generate_a1(yao_values)
-    st.toast(f"[3] generator 完成 {time.time()-_t1:.2f}秒")
     result['meta']['question'] = question if method != 'A1' else ''
     
     st.session_state.result = result
@@ -352,9 +346,6 @@ def show_divining():
 
 
 def show_result():
-    import time
-    _start = time.time()
-    st.toast(f"[4] show_result 開始")
     st.markdown("### 🔮 占卜結果")
     st.markdown(f"**問題**：{st.session_state.display_question}")
     
@@ -382,14 +373,11 @@ def show_result():
     # 1. 現況 - 進入頁面就微調
     s1 = sections['s1_status']
     if need_adapt and not adapted['s1']:
-        st.toast(f"[5] s1 微調開始")
-        _t1 = time.time()
-        with st.spinner("AI 正在解讀現況..."):
+            with st.spinner("AI 正在解讀現況..."):
             adapter = get_adapter()
             s1['content'] = adapter.adapt_single(s1['content'], question, 's1')
             adapted['s1'] = True
             st.session_state.adapted = adapted
-        st.toast(f"[6] s1 完成 {time.time()-_t1:.2f}秒")
     
     with st.expander(f"📍 1. {s1['title']}（{meta['ben_code']}）", expanded=True):
         st.markdown(s1['content'])
