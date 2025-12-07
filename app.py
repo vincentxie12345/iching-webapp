@@ -34,6 +34,7 @@ from iching_system.core.calculator import compute_b_stage
 from iching_system.core.yili_generator import YiliGenerator
 from iching_system.core.yili_llm_adapter import ClaudeLLMAdapter
 from iching_system.divination.a3_questionnaire import get_aspects_for_question, classify_question
+from iching_system.divination.a4_agent import QUESTION_ASPECTS, _classify_question as a4_classify, _call_gemini, _extract_context_info, _generate_market_info, _analyze_and_score
 
 # 初始化 Generator 和 Adapter（只載入一次）
 @st.cache_resource
@@ -77,6 +78,12 @@ def main():
         show_question_input()
     elif st.session_state.step == 'a3_questionnaire':
         show_a3_questionnaire()
+    elif st.session_state.step == 'a4_background':
+        show_a4_background()
+    elif st.session_state.step == 'a4_inner':
+        show_a4_inner()
+    elif st.session_state.step == 'a4_outer':
+        show_a4_outer()
     elif st.session_state.step == 'divining':
         show_divining()
     elif st.session_state.step == 'result':
@@ -100,8 +107,10 @@ def show_method_selection():
             st.session_state.method = 'A2'
             st.session_state.step = 'input_question'
             st.rerun()
-        if st.button("🤖 A4 Agent", disabled=True):
-            pass
+        if st.button("🤖 A4 Agent"):
+            st.session_state.method = 'A4'
+            st.session_state.step = 'input_question'
+            st.rerun()
     
     with st.expander("📖 說明"):
         st.markdown("""
@@ -113,7 +122,8 @@ def show_method_selection():
         """)
 
 def show_question_input():
-    method_name = 'A2 提問' if st.session_state.method == 'A2' else 'A3 問卷'
+    method_names = {'A2': 'A2 提問', 'A3': 'A3 問卷', 'A4': 'A4 Agent'}
+    method_name = method_names.get(st.session_state.method, 'A2 提問')
     st.markdown(f"### {method_name}")
     question = st.text_input("請輸入您的問題", placeholder="例如：該不該跳槽？")
     
@@ -128,8 +138,10 @@ def show_question_input():
                 st.session_state.question = question.strip()
                 if st.session_state.method == 'A2':
                     st.session_state.step = 'divining'
-                else:
+                elif st.session_state.method == 'A3':
                     st.session_state.step = 'a3_questionnaire'
+                elif st.session_state.method == 'A4':
+                    st.session_state.step = 'a4_background'
                 st.rerun()
             else:
                 st.warning("請輸入問題")
@@ -160,6 +172,128 @@ def show_a3_questionnaire():
             st.session_state.step = 'divining'
             st.rerun()
 
+
+def show_a4_background():
+    """A4 Step 1: 背景描述"""
+    st.markdown("### 🤖 A4 Agent 起卦")
+    st.markdown(f"**問題**：{st.session_state.question}")
+    st.markdown("---")
+    
+    st.markdown("#### Step 1: 背景描述")
+    st.markdown("請描述您的情況，越詳細越好，AI 會根據這些資訊搜尋相關資料。")
+    
+    description = st.text_area(
+        "背景描述",
+        placeholder="例如：我目前在科技公司工作3年，考慮轉職到 AI 領域...",
+        height=150
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("⬅️ 返回"):
+            st.session_state.step = 'input_question'
+            st.rerun()
+    with col2:
+        if st.button("➡️ 下一步"):
+            if description.strip():
+                st.session_state.a4_description = description.strip()
+                st.session_state.step = 'a4_inner'
+                st.rerun()
+            else:
+                st.warning("請輸入背景描述")
+
+
+def show_a4_inner():
+    """A4 Step 2: 內三爻問卷"""
+    st.markdown("### 🤖 A4 Agent 起卦")
+    st.markdown(f"**問題**：{st.session_state.question}")
+    st.markdown("---")
+    
+    st.markdown("#### Step 2: 內在評估（問卷）")
+    st.markdown("請為以下三個面向評分（0=非常弱，10=非常強）：")
+    
+    # 根據問題分類取得對應面向
+    q_type = a4_classify(st.session_state.question)
+    inner_aspects = QUESTION_ASPECTS[q_type]['inner']
+    
+    scores = []
+    for i, aspect in enumerate(inner_aspects):
+        score = st.slider(
+            f"**{i+1}. (內在)** {aspect}",
+            0, 10, 5, key=f"a4_inner_{i}"
+        )
+        scores.append(score)
+    
+    st.session_state.a4_inner_scores = scores
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("⬅️ 返回"):
+            st.session_state.step = 'a4_background'
+            st.rerun()
+    with col2:
+        if st.button("🔍 AI 分析外部環境"):
+            st.session_state.step = 'a4_outer'
+            st.rerun()
+
+
+def show_a4_outer():
+    """A4 Step 3: 外三爻 AI 分析"""
+    st.markdown("### 🤖 A4 Agent 起卦")
+    st.markdown(f"**問題**：{st.session_state.question}")
+    st.markdown("---")
+    
+    st.markdown("#### Step 3: 外部環境分析（AI Agent）")
+    
+    question = st.session_state.question
+    description = st.session_state.get('a4_description', '')
+    inner_scores = st.session_state.get('a4_inner_scores', [5, 5, 5])
+    
+    # 根據問題分類取得對應面向
+    q_type = a4_classify(question)
+    outer_aspects = QUESTION_ASPECTS[q_type]['outer']
+    
+    # AI 分析外三爻
+    outer_scores = []
+    
+    # 提取關鍵資訊
+    with st.spinner("正在分析背景資訊..."):
+        full_context = f"{question}\n{description}"
+        context = _extract_context_info(full_context)
+        keywords = context.get('keywords', [question[:10]])
+    
+    st.success("✓ 背景資訊分析完成")
+    
+    # 分析三個外部面向
+    for i, aspect in enumerate(outer_aspects):
+        with st.spinner(f"正在分析第 {i+4} 爻：{aspect[:20]}..."):
+            query = f"{keywords[0] if keywords else question[:10]} {aspect[:10]}"
+            data = _generate_market_info(query)
+            score = _analyze_and_score(aspect, data, question)
+            outer_scores.append(score)
+        st.success(f"✓ 第 {i+4} 爻分析完成：{score} 分")
+    
+    st.session_state.a4_outer_scores = outer_scores
+    
+    # 顯示結果摘要
+    st.markdown("---")
+    st.markdown("#### 分析結果")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**內三爻（主觀評估）**")
+        for i, s in enumerate(inner_scores):
+            st.markdown(f"- 第 {i+1} 爻：{s} 分")
+    with col2:
+        st.markdown("**外三爻（AI 分析）**")
+        for i, s in enumerate(outer_scores):
+            st.markdown(f"- 第 {i+4} 爻：{s} 分")
+    
+    st.markdown("---")
+    if st.button("🎴 開始解卦"):
+        st.session_state.step = 'divining'
+        st.rerun()
+
+
 def show_divining():
     st.markdown("### 🔮 占卜中...")
     method = st.session_state.method
@@ -175,6 +309,12 @@ def show_divining():
                 display_question = question
             elif method == 'A3':
                 yao_values = [score_to_yao(s) for s in st.session_state.scores]
+                display_question = question
+            elif method == 'A4':
+                inner = st.session_state.get('a4_inner_scores', [5, 5, 5])
+                outer = st.session_state.get('a4_outer_scores', [5, 5, 5])
+                all_scores = inner + outer
+                yao_values = [score_to_yao(s) for s in all_scores]
                 display_question = question
             else:
                 st.error(f"未知方式：{method}")
