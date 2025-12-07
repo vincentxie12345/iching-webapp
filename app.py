@@ -351,7 +351,7 @@ def show_result():
     question = st.session_state.get('display_question', '')
     
     # A2/A3 模式：漸進式微調
-    need_adapt = method in ['A2', 'A3'] and question and question != "（默禱，題目在心中）"
+    need_adapt = method in ['A2', 'A3', 'A4'] and question and question != "（默禱，題目在心中）"
     adapted = st.session_state.get('adapted', {'s1': False, 's2': False, 's6': False})
     
     # 卦象資訊
